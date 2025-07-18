@@ -146,7 +146,7 @@ app.post('/process-video', async (req, res) => {
     console.log('Video filter:', videoFilter);
     
     // If no segments to remove, just copy the file
-    if (audioFilter === 'anull' && videoFilter === 'null') {
+    if (audioFilter === 'null' && videoFilter === 'null') {
       await fs.copyFile(currentVideoPath, outputPath);
       res.json({
         success: true,
