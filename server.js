@@ -225,7 +225,7 @@ app.post('/add-music-subtitles', async (req, res) => {
     
     // Download background music if it's a URL
     let localMusicPath = musicPath;
-    if (musicPath && musicPath.startsWith('http')) {
+    if (musicPath && musicPath.startsWith('https')) {
       const musicId = uuidv4();
       localMusicPath = path.join('temp', `${musicId}_music.mp3`);
       await downloadFile(musicPath, localMusicPath);
