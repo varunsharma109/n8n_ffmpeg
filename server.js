@@ -158,9 +158,7 @@ app.post('/process-video', async (req, res) => {
       });
       return;
     }
-
-    //just added for testing
-    finalVideoPath = outputPath;
+    
     
     // Apply complex filter to process both audio and video together
     await new Promise((resolve, reject) => {
