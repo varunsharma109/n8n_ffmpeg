@@ -213,10 +213,15 @@ app.post('/process-video', async (req, res) => {
 // Add background music and subtitles
 app.post('/add-music-subtitles', async (req, res) => {
   try {
-    const { videoPath, musicPath, subtitleContent } = req.body;
+    const { videoPath, musicPath, subtitleContent, srtSubtitles } = req.body;
     
     if (!processedVideoPath) {
       return res.status(400).json({ error: 'No processed video available' });
+    }
+    
+    // Verify input video exists
+    if (!fsSync.existsSync(processedVideoPath)) {
+      return res.status(400).json({ error: 'Input video file does not exist' });
     }
     
     const outputPath = path.join('temp', `final_${uuidv4()}.mp4`);
@@ -224,35 +229,29 @@ app.post('/add-music-subtitles', async (req, res) => {
     
     finalVideoPath = outputPath;
     
-    // Write subtitle content to file
-    await fs.writeFile(subtitlePath, subtitleContent, 'utf8');
+    // Use srtSubtitles if available, otherwise fall back to subtitleContent
+    const subtitleText = srtSubtitles || subtitleContent;
     
-    console.log('Adding background music and subtitles...');
-    
-    // Download background music if it's a URL
-/*    let localMusicPath = musicPath;
-    if (musicPath && musicPath.startsWith('https')) {
-      const musicId = uuidv4();
-      localMusicPath = path.join('temp', `${musicId}_music.mp3`);
-      await downloadFile(musicPath, localMusicPath);
+    if (!subtitleText) {
+      return res.status(400).json({ error: 'No subtitle content provided' });
     }
-*/    
+    
+    // Write subtitle content to file
+    await fs.writeFile(subtitlePath, subtitleText, 'utf8');
+    
+    console.log('Adding subtitles...');
+    console.log('Input video:', processedVideoPath);
+    console.log('Output path:', outputPath);
+    console.log('Subtitle path:', subtitlePath);
+    
     await new Promise((resolve, reject) => {
       const command = ffmpeg(processedVideoPath);
       
-      // Add background music if provided
-/*      if (localMusicPath && fsSync.existsSync(localMusicPath)) {
-        command.input(localMusicPath);
-        command.complexFilter([
-          // Mix original audio with background music
-          '[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=2[audio]'
-        ]);
-        command.outputOptions(['-map', '0:v', '-map', '[audio]']);
-      }
-*/      
-      // Add subtitles
+      // Add subtitles with proper escaping and better styling
+      const escapedSubtitlePath = subtitlePath.replace(/\\/g, '/').replace(/:/g, '\\:');
+      
       command.outputOptions([
-        '-vf', `subtitles=${subtitlePath.replace(/\\/g, '/')}`
+        '-vf', `subtitles='${escapedSubtitlePath}':force_style='FontName=Arial,FontSize=24,PrimaryColour=&Hffffff&,BackColour=&H80000000&,Bold=1,Outline=2,OutlineColour=&H000000&,MarginV=30'`
       ]);
       
       command
@@ -260,37 +259,65 @@ app.post('/add-music-subtitles', async (req, res) => {
         .videoCodec('libx264')
         .audioCodec('aac')
         .outputOptions([
-          '-preset', 'fast',
-          '-crf', '23'
+          '-preset', 'medium',
+          '-crf', '23',
+          '-movflags', '+faststart',
+          '-y' // Overwrite output file if exists
         ])
+        .on('start', (commandLine) => {
+          console.log('FFmpeg command:', commandLine);
+        })
         .on('progress', (progress) => {
-          console.log('Final processing progress:', progress.percent + '%');
+          if (progress.percent) {
+            console.log('Final processing progress:', Math.round(progress.percent) + '%');
+          }
+        })
+        .on('stderr', (stderrLine) => {
+          console.log('FFmpeg stderr:', stderrLine);
         })
         .on('end', () => {
           console.log('Final video processing completed');
+          // Clean up temporary subtitle file
+          fsSync.unlink(subtitlePath, (err) => {
+            if (err) console.warn('Failed to delete temp subtitle file:', err);
+          });
           resolve();
         })
         .on('error', (error) => {
           console.error('FFmpeg error in final processing:', error);
+          console.error('FFmpeg stderr:', error.stderr);
+          // Clean up on error
+          fsSync.unlink(subtitlePath, () => {});
           reject(error);
         })
         .run();
     });
     
+    // Verify output file was created
+    if (!fsSync.existsSync(outputPath)) {
+      throw new Error('Output video file was not created');
+    }
+    
+    const stats = await fs.stat(outputPath);
+    
     res.json({
       success: true,
-      message: 'Background music and subtitles added successfully',
+      message: 'Subtitles added successfully',
       outputPath: outputPath,
       finalStats: {
-        fileSize: (await fs.stat(outputPath)).size,
-        hasMusic: !!localMusicPath,
+        fileSize: stats.size,
+        hasMusic: false, // No music for now
         hasSubtitles: true
       }
     });
     
   } catch (error) {
-    console.error('Error adding music and subtitles:', error);
-    res.status(500).json({ error: 'Failed to add music and subtitles', details: error.message });
+    console.error('Error adding subtitles:', error);
+    res.status(500).json({ 
+      error: 'Failed to add subtitles', 
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
