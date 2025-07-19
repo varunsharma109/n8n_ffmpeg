@@ -251,7 +251,7 @@ app.post('/add-music-subtitles', async (req, res) => {
       const escapedSubtitlePath = subtitlePath.replace(/\\/g, '/').replace(/:/g, '\\:');
       
       command.outputOptions([
-        '-vf', `subtitles='${escapedSubtitlePath}':force_style='FontName=Arial,FontSize=8,PrimaryColour=&Hffffff&,BackColour=&H80000000&,Bold=1,Outline=2,OutlineColour=&H000000&,MarginV=30,MarginL=130,MarginR=130,Alignment=2'`
+        '-vf', `subtitles='${escapedSubtitlePath}':force_style='FontName=Arial,FontSize=8,PrimaryColour=&Hffffff&,BackColour=&H80000000&,Bold=1,Outline=2,OutlineColour=&H000000&,MarginV=30,MarginL=135,MarginR=135,Alignment=2'`
       ]);
       
       command
