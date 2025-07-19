@@ -132,7 +132,7 @@ app.get('/temp-audio/:filename', (req, res) => {
 // Process video to remove segments
 app.post('/process-video', async (req, res) => {
   try {
-    const { videoPath, complexFilterString } = req.body;
+    const { videoPath, audioFilter, videoFilter } = req.body;
     
     if (!currentVideoPath) {
       return res.status(400).json({ error: 'No video file available for processing' });
@@ -142,12 +142,13 @@ app.post('/process-video', async (req, res) => {
     processedVideoPath = outputPath;
     
     console.log('Processing video with filters...');
-    console.log('Complex filter:', complexFilterString);
+    console.log('Audio filter:', audioFilter);
+    console.log('Video filter:', videoFilter);
     console.log('CurrentVideoPath:', currentVideoPath);
     console.log('ProcessedVideoPath:', processedVideoPath);
     
     // If no segments to remove, just copy the file
-    if (complexFilterString === 'null') {
+    if ((audioFilter === 'null' && videoFilter === 'null')) {
       await fs.copyFile(currentVideoPath, outputPath);
       //just added for testing
       finalVideoPath = outputPath;
@@ -164,22 +165,19 @@ app.post('/process-video', async (req, res) => {
       const command = ffmpeg(currentVideoPath);
       
       // Apply video filter
-      //if (videoFilter && videoFilter !== 'null') {
-      //  command.videoFilter(videoFilter);
-      //}
+      if (videoFilter && videoFilter !== 'null') {
+        command.videoFilter(videoFilter);
+      }
       
       // Apply audio filter
-      //if (audioFilter && audioFilter !== 'anull') {
-      //  command.audioFilter(audioFilter);
-      //}
+      if (audioFilter && audioFilter !== 'anull') {
+        command.audioFilter(audioFilter);
+      }
       
       //just added for testing
       finalVideoPath = outputPath;
       
       command
-        .complexFilter(complexFilterString, ['outv', 'outa'])
-        .map('outv')
-        .map('outa')
         .output(outputPath)
         .videoCodec('libx264')
         .audioCodec('aac')
