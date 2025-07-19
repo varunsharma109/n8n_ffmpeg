@@ -167,9 +167,11 @@ app.post('/process-video', async (req, res) => {
       const command = ffmpeg(currentVideoPath);
       
       command
-        .complexFilter(filterComplex, ['outv', 'outa'])
-        .map('[outv]')  // Map video output
-        .map('[outa]')  // Map audio output
+        .complexFilter(filterComplex)
+        .outputOptions([
+          '-map', '[outv]',
+          '-map', '[outa]'
+        ])
         .output(outputPath)
         .videoCodec('libx264')
         .audioCodec('aac')
