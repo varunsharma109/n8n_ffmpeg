@@ -302,8 +302,6 @@ app.post('/add-music-subtitles', async (req, res) => {
 
 // Get final video file
 app.get('/get-final-video', (req, res) => {
-  //just for testing
-  finalVideoPath = "temp/processed_4b110753-5825-4af9-9735-52c37cdadb8d.mp4";
   if (!finalVideoPath || !fsSync.existsSync(finalVideoPath)) {
     return res.status(404).json({ error: 'Final video not found' });
   }
