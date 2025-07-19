@@ -230,18 +230,18 @@ app.post('/add-music-subtitles', async (req, res) => {
     console.log('Adding background music and subtitles...');
     
     // Download background music if it's a URL
-    let localMusicPath = musicPath;
+/*    let localMusicPath = musicPath;
     if (musicPath && musicPath.startsWith('https')) {
       const musicId = uuidv4();
       localMusicPath = path.join('temp', `${musicId}_music.mp3`);
       await downloadFile(musicPath, localMusicPath);
     }
-    
+*/    
     await new Promise((resolve, reject) => {
       const command = ffmpeg(processedVideoPath);
       
       // Add background music if provided
-      if (localMusicPath && fsSync.existsSync(localMusicPath)) {
+/*      if (localMusicPath && fsSync.existsSync(localMusicPath)) {
         command.input(localMusicPath);
         command.complexFilter([
           // Mix original audio with background music
@@ -249,7 +249,7 @@ app.post('/add-music-subtitles', async (req, res) => {
         ]);
         command.outputOptions(['-map', '0:v', '-map', '[audio]']);
       }
-      
+*/      
       // Add subtitles
       command.outputOptions([
         '-vf', `subtitles=${subtitlePath.replace(/\\/g, '/')}`
