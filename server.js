@@ -174,6 +174,9 @@ app.post('/process-video', async (req, res) => {
         command.audioFilter(audioFilter);
       }
       
+      //just added for testing
+      finalVideoPath = outputPath;
+      
       command
         .output(outputPath)
         .videoCodec('libx264')
