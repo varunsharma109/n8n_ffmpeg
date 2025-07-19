@@ -132,7 +132,7 @@ app.get('/temp-audio/:filename', (req, res) => {
 // Process video to remove segments
 app.post('/process-video', async (req, res) => {
   try {
-    const { videoPath, audioFilter, videoFilter } = req.body;
+    const { videoPath, filterComplex } = req.body;
     
     if (!currentVideoPath) {
       return res.status(400).json({ error: 'No video file available for processing' });
@@ -141,14 +141,13 @@ app.post('/process-video', async (req, res) => {
     const outputPath = path.join('temp', `processed_${uuidv4()}.mp4`);
     processedVideoPath = outputPath;
     
-    console.log('Processing video with filters...');
-    console.log('Audio filter:', audioFilter);
-    console.log('Video filter:', videoFilter);
+    console.log('Processing video with complex filter...');
+    console.log('Filter complex:', filterComplex);
     console.log('CurrentVideoPath:', currentVideoPath);
     console.log('ProcessedVideoPath:', processedVideoPath);
     
     // If no segments to remove, just copy the file
-    if ((audioFilter === 'null' && videoFilter === 'null')) {
+    if (!filterComplex) {
       await fs.copyFile(currentVideoPath, outputPath);
       //just added for testing
       finalVideoPath = outputPath;
@@ -159,25 +158,18 @@ app.post('/process-video', async (req, res) => {
       });
       return;
     }
+
+    //just added for testing
+    finalVideoPath = outputPath;
     
-    // Apply filters to remove segments
+    // Apply complex filter to process both audio and video together
     await new Promise((resolve, reject) => {
       const command = ffmpeg(currentVideoPath);
       
-      // Apply video filter
-      if (videoFilter && videoFilter !== 'null') {
-        command.videoFilter(videoFilter);
-      }
-      
-      // Apply audio filter
-      if (audioFilter && audioFilter !== 'anull') {
-        command.audioFilter(audioFilter);
-      }
-      
-      //just added for testing
-      finalVideoPath = outputPath;
-      
       command
+        .complexFilter(filterComplex, ['outv', 'outa'])
+        .map('[outv]')  // Map video output
+        .map('[outa]')  // Map audio output
         .output(outputPath)
         .videoCodec('libx264')
         .audioCodec('aac')
@@ -185,12 +177,14 @@ app.post('/process-video', async (req, res) => {
           '-preset veryfast',
           '-crf 23',
           '-threads 1',
+          '-avoid_negative_ts make_zero'  // Helps with timing issues
         ])
         .on('progress', (progress) => {
           console.log('Processing progress:', progress.percent + '%');
         })
         .on('end', () => {
           console.log('Video processing completed');
+          finalVideoPath = outputPath;
           resolve();
         })
         .on('error', (error) => {
