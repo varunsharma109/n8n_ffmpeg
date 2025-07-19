@@ -176,8 +176,8 @@ app.post('/process-video', async (req, res) => {
       
       command
         .output(outputPath)
-        .videoCodec('libx264')
-        .audioCodec('aac')
+        .videoCodec('copy')
+        .audioCodec('copy')
         .on('progress', (progress) => {
           console.log('Processing progress:', progress.percent + '%');
         })
