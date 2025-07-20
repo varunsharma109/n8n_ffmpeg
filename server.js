@@ -247,11 +247,35 @@ app.post('/add-music-subtitles', async (req, res) => {
     await new Promise((resolve, reject) => {
       const command = ffmpeg(processedVideoPath);
       
-      // Add subtitles with proper escaping and better styling
+      // Add background music if provided
+      if (musicPath && fsSync.existsSync(musicPath)) {
+        console.log('Adding background music:', musicPath);
+        command.input(musicPath);
+      }
+      
+      // Add subtitles with proper escaping and positioning within video bounds
       const escapedSubtitlePath = subtitlePath.replace(/\\/g, '/').replace(/:/g, '\\:');
       
+      // Configure audio and video filters
+      const audioFilters = [];
+      const videoFilters = [`subtitles='${escapedSubtitlePath}':force_style='FontName=Arial,FontSize=8,PrimaryColour=&Hffffff&,BackColour=&H80000000&,Bold=1,Outline=2,OutlineColour=&H000000&,MarginV=60,MarginL=135,MarginR=235,Alignment=2'`];
+      
+      if (musicPath && fsSync.existsSync(musicPath)) {
+        // Mix original audio with background music
+        // [0:a] = original video audio, [1:a] = background music
+        audioFilters.push('[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=0[aout]');
+        command.outputOptions([
+          '-map', '0:v',  // Use video from first input (original video)
+          '-map', '[aout]' // Use mixed audio output
+        ]);
+      }
+      
+      // Apply filters
+      if (audioFilters.length > 0) {
+        command.complexFilter(audioFilters.join(';'));
+      }
       command.outputOptions([
-        '-vf', `subtitles='${escapedSubtitlePath}':force_style='FontName=Arial,FontSize=8,PrimaryColour=&Hffffff&,BackColour=&H80000000&,Bold=1,Outline=2,OutlineColour=&H000000&,MarginV=60,MarginL=135,MarginR=135,Alignment=2'`
+        '-vf', videoFilters.join(',')
       ]);
       
       command
@@ -308,7 +332,7 @@ app.post('/add-music-subtitles', async (req, res) => {
       outputPath: outputPath,
       finalStats: {
         fileSize: stats.size,
-        hasMusic: false, // No music for now
+        hasMusic: !!(musicPath && fsSync.existsSync(musicPath)), // Check if music was actually added
         hasSubtitles: true
       }
     });
