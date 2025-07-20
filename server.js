@@ -291,7 +291,7 @@ app.post('/add-music-subtitles', async (req, res) => {
       if (actualMusicPath && fsSync.existsSync(actualMusicPath)) {
         // Mix original audio with background music
         // Lower original audio volume and add background music at moderate volume
-        audioFilters.push('[0:a]volume=0.8[a0];[1:a]volume=0.4[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[aout]');
+        audioFilters.push('[0:a]volume=0.8[a0];[1:a]volume=0.2[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[aout]');
         command.outputOptions([
           '-map', '0:v',  // Use video from first input (original video)
           '-map', '[aout]' // Use mixed audio output
