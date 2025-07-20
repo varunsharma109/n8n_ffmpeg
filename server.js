@@ -258,12 +258,12 @@ app.post('/add-music-subtitles', async (req, res) => {
       
       // Configure audio and video filters
       const audioFilters = [];
-      const videoFilters = [`subtitles='${escapedSubtitlePath}':force_style='FontName=Arial,FontSize=8,PrimaryColour=&Hffffff&,BackColour=&H80000000&,Bold=1,Outline=2,OutlineColour=&H000000&,MarginV=60,MarginL=135,MarginR=235,Alignment=2'`];
+      const videoFilters = [`subtitles='${escapedSubtitlePath}':force_style='FontName=Arial,FontSize=8,PrimaryColour=&Hffffff&,BackColour=&H80000000&,Bold=1,Outline=2,OutlineColour=&H000000&,MarginV=60,MarginL=135,MarginR=135,Alignment=2'`];
       
       if (musicPath && fsSync.existsSync(musicPath)) {
         // Mix original audio with background music
         // [0:a] = original video audio, [1:a] = background music
-        audioFilters.push('[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=0[aout]');
+        audioFilters.push('[0:a]volume=0.5[a0];[1:a]volume=0.6[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[aout]');
         command.outputOptions([
           '-map', '0:v',  // Use video from first input (original video)
           '-map', '[aout]' // Use mixed audio output
