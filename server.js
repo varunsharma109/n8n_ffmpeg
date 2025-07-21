@@ -286,7 +286,7 @@ app.post('/add-music-subtitles', async (req, res) => {
       
       // Configure audio and video filters
       const audioFilters = [];
-      const videoFilters = [`subtitles='${escapedSubtitlePath}':force_style='FontName=Arial,FontSize=10,PrimaryColour=&Hffffff&,BackColour=&H80000000&,Bold=1,Outline=2,OutlineColour=&H000000&,MarginV=60,MarginL=80,MarginR=80,Alignment=2'`];
+      const videoFilters = [`subtitles='${escapedSubtitlePath}':force_style='FontName=Arial,FontSize=10,PrimaryColour=&Hffffff&,BackColour=&H80000000&,Bold=1,Outline=2,OutlineColour=&H000000&,MarginV=60,MarginL=50,MarginR=50,Alignment=2'`];
       
       if (actualMusicPath && fsSync.existsSync(actualMusicPath)) {
         // Mix original audio with background music
