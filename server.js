@@ -6,6 +6,8 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
+const { exec } = require('child_process');
+const os = require('os');
 
 const app = express();
 const PORT = 3001;
@@ -77,39 +79,79 @@ const downloadGoogleDriveFile = async (fileId, filepath) => {
   }
 };
 
-// Helper function to attempt download with given URL
-const attemptDownload = async (downloadUrl, filepath) => {
+const { exec } = require('child_process');
+const path = require('path');
+const os = require('os');
+const fsSync = require('fs');
+
+// Compress video using ffmpeg and output to final file path
+const compressVideo = (inputPath, outputPath) => {
+  return new Promise((resolve, reject) => {
+    const compressionCommand = `
+      ffmpeg -y -i "${inputPath}" -vcodec libx264 -crf 28 -preset veryfast -acodec aac -b:a 128k -movflags +faststart "${outputPath}"
+    `;
+    
+    exec(compressionCommand, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(`FFmpeg compression failed: ${stderr || error.message}`));
+      } else {
+        resolve();
+      }
+    });
+  });
+};
+
+// Helper function to attempt download with compression
+const attemptDownload = async (downloadUrl, finalFilePath) => {
+  const tempFilePath = path.join(os.tmpdir(), `temp_${Date.now()}.mp4`);
   const response = await axios({
     method: 'GET',
     url: downloadUrl,
     responseType: 'stream',
     maxRedirects: 5,
-    timeout: 60000 // 30 second timeout
+    timeout: 60000
   });
-  
-  // Check if we got HTML instead of the file (virus scan page)
+
   const contentType = response.headers['content-type'];
   if (contentType && contentType.includes('text/html')) {
-    throw new Error('Received HTML page instead of file (likely virus scan warning)');
+    throw new Error('Received HTML page instead of video (likely virus scan)');
   }
-  
-  const writer = fsSync.createWriteStream(filepath);
+
+  const writer = fsSync.createWriteStream(tempFilePath);
   response.data.pipe(writer);
-  
+
   return new Promise((resolve, reject) => {
-    writer.on('finish', () => {
-      // Verify file was actually downloaded (not empty)
-      const stats = fsSync.statSync(filepath);
+    writer.on('finish', async () => {
+      const stats = fsSync.statSync(tempFilePath);
       if (stats.size === 0) {
-        fsSync.unlinkSync(filepath); // Delete empty file
+        fsSync.unlinkSync(tempFilePath);
         reject(new Error('Downloaded file is empty'));
       } else {
-        resolve();
+        try {
+          console.log(`Downloaded to temp file: ${tempFilePath}`);
+          console.log(`Compressing video...`);
+
+          await compressVideo(tempFilePath, finalFilePath);
+
+          console.log(`Compression complete. Saved to: ${finalFilePath}`);
+
+          fsSync.unlinkSync(tempFilePath); // Cleanup temp
+
+          resolve();
+        } catch (compressionError) {
+          fsSync.unlinkSync(tempFilePath);
+          reject(compressionError);
+        }
       }
     });
-    writer.on('error', reject);
+
+    writer.on('error', (err) => {
+      if (fsSync.existsSync(tempFilePath)) fsSync.unlinkSync(tempFilePath);
+      reject(err);
+    });
   });
 };
+
 
 // Handle virus scan page by parsing HTML to get actual download link
 const handleVirusScanPage = async (fileId, filepath) => {
