@@ -82,7 +82,7 @@ const downloadGoogleDriveFile = async (fileId, filepath) => {
 // Compress video using ffmpeg and output to final file path
 const compressVideo = (inputPath, outputPath) => {
   return new Promise((resolve, reject) => {
-    const cmd = `ffmpeg -i "${inputPath}" -c:v libx264 -crf 23 -preset medium -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:-1:-1:color=black" -c:a aac -b:a 128k -movflags +faststart -y "${outputPath}"`;
+    const cmd = `ffmpeg -i "${inputPath}" -c:v libx264 -crf 22 -preset slow -tune film -maxrate 1.5M -bufsize 3M -vf "scale='if(gte(iw,ih),min(1280,iw),-2)':'if(lt(iw,ih),min(720,ih),-2)'" -c:a aac -b:a 128k -ac 2 -movflags +faststart -y "${outputPath}"`;
     
     exec(cmd, (error, stdout, stderr) => {
       if (error) {
