@@ -84,7 +84,7 @@ const compressVideo = (inputPath, outputPath) => {
   return new Promise((resolve, reject) => {
     const cmd = `ffmpeg -i "${inputPath}" -c:v libx264 -crf 28 -preset fast -vf scale=1280:720 -c:a aac -b:a 64k -movflags +faststart -y "${outputPath}"`;
     
-    execSync(cmd, (error, stdout, stderr) => {
+    exec(cmd, (error, stdout, stderr) => {
       if (error) {
         reject(new Error(`FFmpeg compression failed: ${stderr || error.message}`));
       } else {
