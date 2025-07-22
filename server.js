@@ -38,36 +38,13 @@ const ensureTempDir = async () => {
   }
 };
 
-// Utility function to download file from URL
-const axios = require('axios');
-const fsSync = require('fs');
 
-// Enhanced utility function to download file from URL (handles Google Drive large files)
-const downloadFile = async (url, filepath, googleDriveFileID) => {
+// Enhanced utility function to download Google Drive files (handles both small and large files)
+const downloadFile = async (filepath, googleDriveFileID) => {
   try {
-    // If it's a Google Drive file, use enhanced logic
-    if (googleDriveFileID) {
-      return await downloadGoogleDriveFile(googleDriveFileID, filepath);
-    }
-    
-    // For non-Google Drive URLs, use original logic
-    const response = await axios({
-      method: 'GET',
-      url: url,
-      responseType: 'stream',
-      maxRedirects: 5
-    });
-    
-    const writer = fsSync.createWriteStream(filepath);
-    response.data.pipe(writer);
-    
-    return new Promise((resolve, reject) => {
-      writer.on('finish', resolve);
-      writer.on('error', reject);
-    });
-    
+    return await downloadGoogleDriveFile(googleDriveFileID, filepath);
   } catch (error) {
-    console.error('Download failed:', error.message);
+    console.error('Google Drive download failed:', error.message);
     throw error;
   }
 };
@@ -179,12 +156,6 @@ const handleVirusScanPage = async (fileId, filepath) => {
   return await attemptDownload(actualDownloadUrl, filepath);
 };
 
-// Helper function to get appropriate Google Drive download URL
-const getGoogleDriveUrl = (fileId, bypassVirusScan = false) => {
-  const baseUrl = 'https://drive.google.com/uc?export=download&id=' + fileId;
-  return bypassVirusScan ? baseUrl + '&confirm=t' : baseUrl;
-};
-
 // Helper function to extract file ID from Google Drive URLs
 const extractGoogleDriveFileId = (url) => {
   const patterns = [
@@ -206,8 +177,7 @@ const extractGoogleDriveFileId = (url) => {
 module.exports = {
   downloadFile,
   downloadGoogleDriveFile,
-  extractGoogleDriveFileId,
-  getGoogleDriveUrl
+  extractGoogleDriveFileId
 };
 
 // Global variables to store file paths
@@ -223,7 +193,7 @@ app.get('/health', (req, res) => {
 // Extract audio from video
 app.post('/extract-audio', async (req, res) => {
   try {
-    const { videoUrl, googleDriveFileID } = req.body;
+    const { googleDriveFileID } = req.body;
     
     if (!videoUrl) {
       return res.status(400).json({ error: 'Video URL is required' });
@@ -237,7 +207,7 @@ app.post('/extract-audio', async (req, res) => {
     const audioPath = path.join('temp', `${videoId}_audio.wav`);
     
     console.log('Downloading video from:', videoUrl);
-    await downloadFile(videoUrl, videoPath, googleDriveFileID);
+    await downloadFile(videoPath, googleDriveFileID);
     
     // Store video path for later use
     currentVideoPath = videoPath;
@@ -368,7 +338,7 @@ app.post('/process-video', async (req, res) => {
 // Add background music and subtitles
 app.post('/add-music-subtitles', async (req, res) => {
   try {
-    const { videoPath, musicPath, subtitleContent, srtSubtitles, googleDriveFileIDForMusic } = req.body;
+    const { videoPath, subtitleContent, srtSubtitles, googleDriveFileIDForMusic } = req.body;
     
     if (!processedVideoPath) {
       return res.status(400).json({ error: 'No processed video available' });
@@ -397,29 +367,19 @@ app.post('/add-music-subtitles', async (req, res) => {
     
     // Handle music file - download if URL, use local path if file path
     let actualMusicPath = null;
-    if (musicPath) {
-      if (musicPath.startsWith('http://') || musicPath.startsWith('https://')) {
+    if (googleDriveFileIDForMusic) {
         // Download music from URL
-        console.log('Downloading music from URL:', musicPath);
+        console.log('Downloading music from google drive ID:', googleDriveFileIDForMusic);
         downloadedMusicPath = path.join('temp', `music_${uuidv4()}.mp3`);
-        
         try {
-          await downloadFile(musicPath, downloadedMusicPath, googleDriveFileIDForMusic);
+          await downloadFile(downloadedMusicPath, googleDriveFileIDForMusic);
           actualMusicPath = downloadedMusicPath;
           console.log('Music downloaded to:', actualMusicPath);
         } catch (downloadError) {
           console.warn('Failed to download music:', downloadError.message);
           // Continue without music if download fails
         }
-      } else {
-        // Use local file path
-        if (fsSync.existsSync(musicPath)) {
-          actualMusicPath = musicPath;
-          console.log('Using local music file:', actualMusicPath);
-        } else {
-          console.warn('Local music file does not exist:', musicPath);
-        }
-      }
+       
     }
     
     console.log('Adding subtitles...');
