@@ -84,7 +84,7 @@ const attemptDownload = async (downloadUrl, filepath) => {
     url: downloadUrl,
     responseType: 'stream',
     maxRedirects: 5,
-    timeout: 30000, // 30 second timeout
+    timeout: 60000 // 30 second timeout
   });
   
   // Check if we got HTML instead of the file (virus scan page)
@@ -119,34 +119,36 @@ const handleVirusScanPage = async (fileId, filepath) => {
   const virusScanUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
   const htmlResponse = await axios({
     method: 'GET',
-    url: virusScanUrl,
+    url: virusScanUrl
   });
   
   const htmlContent = htmlResponse.data;
   
-  // Look for the actual download link in the HTML
-  const patterns = [
-    /href="([^"]*&amp;confirm=t[^"]*)"/,
-    /action="([^"]*export=download[^"]*)"/,
-    /"downloadUrl":"([^"]+)"/
-  ];
+  // Parse the form action and hidden inputs from the HTML
+  const formActionMatch = htmlContent.match(/action="([^"]+)"/);
+  const idMatch = htmlContent.match(/name="id" value="([^"]+)"/);
+  const exportMatch = htmlContent.match(/name="export" value="([^"]+)"/);
+  const confirmMatch = htmlContent.match(/name="confirm" value="([^"]+)"/);
+  const uuidMatch = htmlContent.match(/name="uuid" value="([^"]+)"/);
   
-  let actualDownloadUrl = null;
-  
-  for (const pattern of patterns) {
-    const match = htmlContent.match(pattern);
-    if (match) {
-      actualDownloadUrl = match[1].replace(/&amp;/g, '&');
-      break;
-    }
+  if (!formActionMatch || !idMatch || !exportMatch || !confirmMatch) {
+    throw new Error('Could not parse virus scan page HTML');
   }
   
-  if (!actualDownloadUrl) {
-    // Fallback: construct URL with confirm parameter
-    actualDownloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t&uuid=${Date.now()}`;
+  // Construct the actual download URL
+  const baseUrl = formActionMatch[1];
+  const params = new URLSearchParams();
+  params.append('id', idMatch[1]);
+  params.append('export', exportMatch[1]);
+  params.append('confirm', confirmMatch[1]);
+  
+  if (uuidMatch) {
+    params.append('uuid', uuidMatch[1]);
   }
   
-  console.log('Found actual download URL, attempting download...');
+  const actualDownloadUrl = `${baseUrl}?${params.toString()}`;
+  
+  console.log('Constructed download URL from virus scan page');
   return await attemptDownload(actualDownloadUrl, filepath);
 };
 
