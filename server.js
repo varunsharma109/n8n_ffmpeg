@@ -39,20 +39,175 @@ const ensureTempDir = async () => {
 };
 
 // Utility function to download file from URL
-const downloadFile = async (url, filepath) => {
+const axios = require('axios');
+const fsSync = require('fs');
+
+// Enhanced utility function to download file from URL (handles Google Drive large files)
+const downloadFile = async (url, filepath, googleDriveFileID) => {
+  try {
+    // If it's a Google Drive file, use enhanced logic
+    if (googleDriveFileID) {
+      return await downloadGoogleDriveFile(googleDriveFileID, filepath);
+    }
+    
+    // For non-Google Drive URLs, use original logic
+    const response = await axios({
+      method: 'GET',
+      url: url,
+      responseType: 'stream',
+      maxRedirects: 5
+    });
+    
+    const writer = fsSync.createWriteStream(filepath);
+    response.data.pipe(writer);
+    
+    return new Promise((resolve, reject) => {
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+    
+  } catch (error) {
+    console.error('Download failed:', error.message);
+    throw error;
+  }
+};
+
+// Specialized function for Google Drive downloads
+const downloadGoogleDriveFile = async (fileId, filepath) => {
+  const downloadMethods = [
+    // Method 1: Standard download URL
+    () => attemptDownload(`https://drive.google.com/uc?export=download&id=${fileId}`, filepath),
+    
+    // Method 2: Bypass virus scan for large files
+    () => attemptDownload(`https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`, filepath),
+    
+    // Method 3: Handle virus scan page by parsing HTML
+    () => handleVirusScanPage(fileId, filepath)
+  ];
+  
+  for (let i = 0; i < downloadMethods.length; i++) {
+    try {
+      console.log(`Trying Google Drive download method ${i + 1}...`);
+      await downloadMethods[i]();
+      console.log('Download completed successfully');
+      return;
+    } catch (error) {
+      console.log(`Method ${i + 1} failed:`, error.message);
+      if (i === downloadMethods.length - 1) {
+        throw new Error('All Google Drive download methods failed');
+      }
+    }
+  }
+};
+
+// Helper function to attempt download with given URL
+const attemptDownload = async (downloadUrl, filepath) => {
   const response = await axios({
     method: 'GET',
-    url: url,
-    responseType: 'stream'
+    url: downloadUrl,
+    responseType: 'stream',
+    maxRedirects: 5,
+    timeout: 30000, // 30 second timeout
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
   });
+  
+  // Check if we got HTML instead of the file (virus scan page)
+  const contentType = response.headers['content-type'];
+  if (contentType && contentType.includes('text/html')) {
+    throw new Error('Received HTML page instead of file (likely virus scan warning)');
+  }
   
   const writer = fsSync.createWriteStream(filepath);
   response.data.pipe(writer);
   
   return new Promise((resolve, reject) => {
-    writer.on('finish', resolve);
+    writer.on('finish', () => {
+      // Verify file was actually downloaded (not empty)
+      const stats = fsSync.statSync(filepath);
+      if (stats.size === 0) {
+        fsSync.unlinkSync(filepath); // Delete empty file
+        reject(new Error('Downloaded file is empty'));
+      } else {
+        resolve();
+      }
+    });
     writer.on('error', reject);
   });
+};
+
+// Handle virus scan page by parsing HTML to get actual download link
+const handleVirusScanPage = async (fileId, filepath) => {
+  console.log('Handling virus scan page...');
+  
+  // First, get the virus scan page
+  const virusScanUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+  const htmlResponse = await axios({
+    method: 'GET',
+    url: virusScanUrl,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+  });
+  
+  const htmlContent = htmlResponse.data;
+  
+  // Look for the actual download link in the HTML
+  const patterns = [
+    /href="([^"]*&amp;confirm=t[^"]*)"/,
+    /action="([^"]*export=download[^"]*)"/,
+    /"downloadUrl":"([^"]+)"/
+  ];
+  
+  let actualDownloadUrl = null;
+  
+  for (const pattern of patterns) {
+    const match = htmlContent.match(pattern);
+    if (match) {
+      actualDownloadUrl = match[1].replace(/&amp;/g, '&');
+      break;
+    }
+  }
+  
+  if (!actualDownloadUrl) {
+    // Fallback: construct URL with confirm parameter
+    actualDownloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t&uuid=${Date.now()}`;
+  }
+  
+  console.log('Found actual download URL, attempting download...');
+  return await attemptDownload(actualDownloadUrl, filepath);
+};
+
+// Helper function to get appropriate Google Drive download URL
+const getGoogleDriveUrl = (fileId, bypassVirusScan = false) => {
+  const baseUrl = 'https://drive.google.com/uc?export=download&id=' + fileId;
+  return bypassVirusScan ? baseUrl + '&confirm=t' : baseUrl;
+};
+
+// Helper function to extract file ID from Google Drive URLs
+const extractGoogleDriveFileId = (url) => {
+  const patterns = [
+    /\/file\/d\/([a-zA-Z0-9-_]+)/,  // Standard share link
+    /id=([a-zA-Z0-9-_]+)/,          // Direct download link
+    /\/d\/([a-zA-Z0-9-_]+)/         // Short format
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+  
+  return null;
+};
+
+module.exports = {
+  downloadFile,
+  downloadGoogleDriveFile,
+  extractGoogleDriveFileId,
+  getGoogleDriveUrl
 };
 
 // Global variables to store file paths
@@ -68,7 +223,7 @@ app.get('/health', (req, res) => {
 // Extract audio from video
 app.post('/extract-audio', async (req, res) => {
   try {
-    const { videoUrl } = req.body;
+    const { videoUrl, googleDriveFileID } = req.body;
     
     if (!videoUrl) {
       return res.status(400).json({ error: 'Video URL is required' });
@@ -82,7 +237,7 @@ app.post('/extract-audio', async (req, res) => {
     const audioPath = path.join('temp', `${videoId}_audio.wav`);
     
     console.log('Downloading video from:', videoUrl);
-    await downloadFile(videoUrl, videoPath);
+    await downloadFile(videoUrl, videoPath, googleDriveFileID);
     
     // Store video path for later use
     currentVideoPath = videoPath;
@@ -213,7 +368,7 @@ app.post('/process-video', async (req, res) => {
 // Add background music and subtitles
 app.post('/add-music-subtitles', async (req, res) => {
   try {
-    const { videoPath, musicPath, subtitleContent, srtSubtitles } = req.body;
+    const { videoPath, musicPath, subtitleContent, srtSubtitles, googleDriveFileIDForMusic } = req.body;
     
     if (!processedVideoPath) {
       return res.status(400).json({ error: 'No processed video available' });
@@ -249,7 +404,7 @@ app.post('/add-music-subtitles', async (req, res) => {
         downloadedMusicPath = path.join('temp', `music_${uuidv4()}.mp3`);
         
         try {
-          await downloadFile(musicPath, downloadedMusicPath);
+          await downloadFile(musicPath, downloadedMusicPath, googleDriveFileIDForMusic);
           actualMusicPath = downloadedMusicPath;
           console.log('Music downloaded to:', actualMusicPath);
         } catch (downloadError) {
