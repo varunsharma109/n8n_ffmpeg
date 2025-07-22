@@ -79,11 +79,6 @@ const downloadGoogleDriveFile = async (fileId, filepath) => {
   }
 };
 
-const { exec } = require('child_process');
-const path = require('path');
-const os = require('os');
-const fsSync = require('fs');
-
 // Compress video using ffmpeg and output to final file path
 const compressVideo = (inputPath, outputPath) => {
   return new Promise((resolve, reject) => {
