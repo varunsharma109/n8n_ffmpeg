@@ -85,9 +85,6 @@ const attemptDownload = async (downloadUrl, filepath) => {
     responseType: 'stream',
     maxRedirects: 5,
     timeout: 30000, // 30 second timeout
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
   });
   
   // Check if we got HTML instead of the file (virus scan page)
@@ -123,9 +120,6 @@ const handleVirusScanPage = async (fileId, filepath) => {
   const htmlResponse = await axios({
     method: 'GET',
     url: virusScanUrl,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
   });
   
   const htmlContent = htmlResponse.data;
