@@ -195,8 +195,8 @@ app.post('/extract-audio', async (req, res) => {
   try {
     const { googleDriveFileID } = req.body;
     
-    if (!videoUrl) {
-      return res.status(400).json({ error: 'Video URL is required' });
+    if (!googleDriveFileID) {
+      return res.status(400).json({ error: 'Video ID is required' });
     }
 
     await ensureTempDir();
@@ -206,7 +206,7 @@ app.post('/extract-audio', async (req, res) => {
     const videoPath = path.join('temp', `${videoId}_input.mp4`);
     const audioPath = path.join('temp', `${videoId}_audio.wav`);
     
-    console.log('Downloading video from:', videoUrl);
+    console.log('Downloading video from google drive:', googleDriveFileID);
     await downloadFile(videoPath, googleDriveFileID);
     
     // Store video path for later use
