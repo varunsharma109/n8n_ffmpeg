@@ -40,6 +40,23 @@ const ensureTempDir = async () => {
   }
 };
 
+// Utility function to download music file from URL
+const downloadMusicFile = async (url, filepath) => {
+  const response = await axios({
+    method: 'GET',
+    url: url,
+    responseType: 'stream'
+  });
+
+  const writer = fsSync.createWriteStream(filepath);
+  response.data.pipe(writer);
+
+  return new Promise((resolve, reject) => {
+    writer.on('finish', resolve);
+    writer.on('error', reject);
+  });
+};
+
 
 // Enhanced utility function to download Google Drive files (handles both small and large files)
 const downloadFile = async (filepath, googleDriveFileID) => {
@@ -403,7 +420,8 @@ app.post('/add-music-subtitles', async (req, res) => {
         console.log('Downloading music from google drive ID:', googleDriveFileIDForMusic);
         downloadedMusicPath = path.join('temp', `music_${uuidv4()}.mp3`);
         try {
-          await downloadFile(downloadedMusicPath, googleDriveFileIDForMusic);
+          //await downloadFile(downloadedMusicPath, googleDriveFileIDForMusic);
+          await downloadMusicFile(`https://drive.google.com/uc?export=download&id=${googleDriveFileIDForMusic}`, downloadedMusicPath);
           actualMusicPath = downloadedMusicPath;
           console.log('Music downloaded to:', actualMusicPath);
         } catch (downloadError) {
