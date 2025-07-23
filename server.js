@@ -119,7 +119,7 @@ const attemptDownload = async (downloadUrl, finalFilePath) => {
     url: downloadUrl,
     responseType: 'stream',
     maxRedirects: 5,
-    timeout: 60000
+    timeout: 90000
   });
 
   const contentType = response.headers['content-type'];
