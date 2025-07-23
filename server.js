@@ -40,16 +40,6 @@ const ensureTempDir = async () => {
   }
 };
 
-// Serve temporary video files
-app.use('/temp-video', express.static(path.join(__dirname, 'temp'), {
-  setHeaders: (res, filePath) => {
-    if (path.extname(filePath) === '.mp4') {
-      res.setHeader('Content-Type', 'video/mp4');
-      res.setHeader('Accept-Ranges', 'bytes');
-    }
-  }
-}));
-
 // Utility function to download music file from URL
 const downloadMusicFile = async (url, filepath) => {
   const response = await axios({
@@ -291,7 +281,8 @@ app.post('/extract-audio', async (req, res) => {
       success: true,
       audioUrl: audioUrl,
       audioPath: audioPath,
-      videoPath: videoPath
+      videoPath: videoPath,
+      videoId: `${videoId}_input.mp4`
     });
     
   } catch (error) {
@@ -309,6 +300,18 @@ app.get('/temp-audio/:filename', (req, res) => {
     res.sendFile(path.resolve(filePath));
   } else {
     res.status(404).json({ error: 'Audio file not found' });
+  }
+});
+
+// Serve temporary video files
+app.get('/temp-video/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join('temp', filename);
+  
+  if (fsSync.existsSync(filePath)) {
+    res.sendFile(path.resolve(filePath));
+  } else {
+    res.status(404).json({ error: 'Video file not found' });
   }
 });
 
