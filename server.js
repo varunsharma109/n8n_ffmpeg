@@ -40,6 +40,16 @@ const ensureTempDir = async () => {
   }
 };
 
+// Serve temporary video files
+app.use('/temp-video', express.static(path.join(__dirname, 'temp'), {
+  setHeaders: (res, filePath) => {
+    if (path.extname(filePath) === '.mp4') {
+      res.setHeader('Content-Type', 'video/mp4');
+      res.setHeader('Accept-Ranges', 'bytes');
+    }
+  }
+}));
+
 // Utility function to download music file from URL
 const downloadMusicFile = async (url, filepath) => {
   const response = await axios({
