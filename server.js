@@ -304,9 +304,8 @@ app.get('/temp-audio/:filename', (req, res) => {
 });
 
 // Serve temporary video files
-app.get('/temp-video/:filename', (req, res) => {
-  const filename = req.params.filename;
-  const filePath = path.join('temp', filename);
+app.get('/temp-video/:filepath', (req, res) => {
+  const filePath = req.params.filepath;
   
   if (fsSync.existsSync(filePath)) {
     res.sendFile(path.resolve(filePath));
