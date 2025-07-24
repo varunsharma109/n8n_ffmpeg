@@ -398,7 +398,7 @@ app.post('/process-video', async (req, res) => {
 // Add background music and subtitles
 app.post('/add-music-subtitles', async (req, res) => {
   try {
-    const { videoPath, subtitleContent, srtSubtitles, googleDriveFileIDForMusic } = req.body;
+    const { videoPath, subtitleContent, srtSubtitles, googleDriveFileIDForMusic, videoUrl } = req.body;
     
     if (!processedVideoPath) {
       return res.status(400).json({ error: 'No processed video available' });
@@ -412,6 +412,7 @@ app.post('/add-music-subtitles', async (req, res) => {
     const outputPath = path.join('temp', `final_${uuidv4()}.mp4`);
     const subtitlePath = path.join('temp', `subtitles_${uuidv4()}.srt`);
     let downloadedMusicPath = null;
+    let downloadedVideoPath = null;
     
     finalVideoPath = outputPath;
     
@@ -435,6 +436,22 @@ app.post('/add-music-subtitles', async (req, res) => {
           //await downloadFile(downloadedMusicPath, googleDriveFileIDForMusic);
           await downloadMusicFile(`https://drive.google.com/uc?export=download&id=${googleDriveFileIDForMusic}`, downloadedMusicPath);
           actualMusicPath = downloadedMusicPath;
+          console.log('Music downloaded to:', actualMusicPath);
+        } catch (downloadError) {
+          console.warn('Failed to download music:', downloadError.message);
+          // Continue without music if download fails
+        }
+       
+    }
+
+    if (videoUrl) {
+        // Download music from URL
+        console.log('Downloading video from creatomate:', videoUrl);
+        downloadedVideoPath = path.join('temp', `video_${uuidv4()}.mp4`);
+        try {
+          //await downloadFile(downloadedMusicPath, googleDriveFileIDForMusic);
+          await downloadMusicFile(vidooUrl, downloadedVideoPath);
+          processedVideoPath = downloadedVideoPath;
           console.log('Music downloaded to:', actualMusicPath);
         } catch (downloadError) {
           console.warn('Failed to download music:', downloadError.message);
