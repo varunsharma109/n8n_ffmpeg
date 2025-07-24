@@ -334,8 +334,6 @@ app.post('/process-video', async (req, res) => {
     // If no segments to remove, just copy the file
     if (!filterComplex) {
       await fs.copyFile(currentVideoPath, outputPath);
-      //just added for testing
-      finalVideoPath = outputPath;
       res.json({
         success: true,
         message: 'No segments to remove, video copied as-is',
@@ -450,7 +448,7 @@ app.post('/add-music-subtitles', async (req, res) => {
         downloadedVideoPath = path.join('temp', `video_${uuidv4()}.mp4`);
         try {
           //await downloadFile(downloadedMusicPath, googleDriveFileIDForMusic);
-          await downloadMusicFile(vidooUrl, downloadedVideoPath);
+          await downloadMusicFile(videoUrl, downloadedVideoPath);
           processedVideoPath = downloadedVideoPath;
           console.log('Music downloaded to:', actualMusicPath);
         } catch (downloadError) {
