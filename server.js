@@ -384,6 +384,7 @@ app.post('/process-video', async (req, res) => {
       success: true,
       message: 'Video processed successfully',
       outputPath: outputPath,
+      processedVideoId: `processed_${uuidv4()}.mp4`,
       stats: {
         originalSize: (await fs.stat(currentVideoPath)).size,
         processedSize: (await fs.stat(outputPath)).size
