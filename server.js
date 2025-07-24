@@ -281,7 +281,8 @@ app.post('/extract-audio', async (req, res) => {
       success: true,
       audioUrl: audioUrl,
       audioPath: audioPath,
-      videoPath: videoPath
+      videoPath: videoPath,
+      videoId: `${videoId}_input.mp4`
     });
     
   } catch (error) {
@@ -303,8 +304,9 @@ app.get('/temp-audio/:filename', (req, res) => {
 });
 
 // Serve temporary video files
-app.get('/temp-video/:filepath', (req, res) => {
-  const filePath = req.params.filepath;
+app.get('/temp-video/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join('temp', filename);
   
   if (fsSync.existsSync(filePath)) {
     res.sendFile(path.resolve(filePath));
@@ -541,6 +543,7 @@ app.post('/add-music-subtitles', async (req, res) => {
       success: true,
       message: 'Subtitles added successfully',
       outputPath: outputPath,
+      videoId: `final_${uuidv4()}.mp4`,
       finalStats: {
         fileSize: stats.size,
         hasMusic: !!(actualMusicPath && fsSync.existsSync(actualMusicPath)), // Check if music was actually added
