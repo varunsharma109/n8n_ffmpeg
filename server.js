@@ -460,11 +460,11 @@ app.post('/add-music-subtitles', async (req, res) => {
       }
       
       // Add subtitles with proper escaping and positioning within video bounds
-      const escapedSubtitlePath = subtitlePath.replace(/\\/g, '/').replace(/:/g, '\\:');
+//      const escapedSubtitlePath = subtitlePath.replace(/\\/g, '/').replace(/:/g, '\\:');
       
       // Configure audio and video filters
       const audioFilters = [];
-      const videoFilters = [`subtitles='${escapedSubtitlePath}':force_style='FontName=Arial,FontSize=12,PrimaryColour=&Hffffff&,BackColour=&H80000000&,Bold=1,Outline=2,OutlineColour=&H000000&,MarginV=40,MarginL=75,MarginR=75,Alignment=2'`];
+//      const videoFilters = [`subtitles='${escapedSubtitlePath}':force_style='FontName=Arial,FontSize=12,PrimaryColour=&Hffffff&,BackColour=&H80000000&,Bold=1,Outline=2,OutlineColour=&H000000&,MarginV=40,MarginL=75,MarginR=75,Alignment=2'`];
       
       if (actualMusicPath && fsSync.existsSync(actualMusicPath)) {
         // Mix original audio with background music
@@ -480,9 +480,9 @@ app.post('/add-music-subtitles', async (req, res) => {
       if (audioFilters.length > 0) {
         command.complexFilter(audioFilters.join(';'));
       }
-      command.outputOptions([
-        '-vf', videoFilters.join(',')
-      ]);
+//      command.outputOptions([
+//        '-vf', videoFilters.join(',')
+//      ]);
       
       command
         .output(outputPath)
