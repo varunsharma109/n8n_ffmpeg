@@ -281,8 +281,7 @@ app.post('/extract-audio', async (req, res) => {
       success: true,
       audioUrl: audioUrl,
       audioPath: audioPath,
-      videoPath: videoPath,
-      videoId: `${videoId}_input.mp4`
+      videoPath: videoPath
     });
     
   } catch (error) {
@@ -542,7 +541,6 @@ app.post('/add-music-subtitles', async (req, res) => {
       success: true,
       message: 'Subtitles added successfully',
       outputPath: outputPath,
-      finalVideoId: `final_${uuidv4()}.mp4`,
       finalStats: {
         fileSize: stats.size,
         hasMusic: !!(actualMusicPath && fsSync.existsSync(actualMusicPath)), // Check if music was actually added
