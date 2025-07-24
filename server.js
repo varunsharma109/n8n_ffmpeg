@@ -384,7 +384,6 @@ app.post('/process-video', async (req, res) => {
       success: true,
       message: 'Video processed successfully',
       outputPath: outputPath,
-      processedVideoId: `processed_${uuidv4()}.mp4`,
       stats: {
         originalSize: (await fs.stat(currentVideoPath)).size,
         processedSize: (await fs.stat(outputPath)).size
@@ -544,6 +543,7 @@ app.post('/add-music-subtitles', async (req, res) => {
       success: true,
       message: 'Subtitles added successfully',
       outputPath: outputPath,
+      finalVideoId: `final_${uuidv4()}.mp4`,
       finalStats: {
         fileSize: stats.size,
         hasMusic: !!(actualMusicPath && fsSync.existsSync(actualMusicPath)), // Check if music was actually added
