@@ -8,9 +8,15 @@ const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
 const { exec } = require('child_process');
 const os = require('os');
+const { spawn } = require('child_process');
 
 const app = express();
 const PORT = 3001;
+
+// Global variables to store file paths
+let currentVideoPath = null;
+let processedVideoPath = null;
+let finalVideoPath = null;
 
 // Serve static files from the 'public' directory
 app.use(express.static('public'));
@@ -38,6 +44,216 @@ const ensureTempDir = async () => {
   } catch {
     await fs.mkdir('temp', { recursive: true });
   }
+};
+
+// Endpoint to merge thumbnail with video
+app.post('/merge-thumbnail-video', async (req, res) => {
+  const { thumbnailID, thumbnailDuration = 0.3 } = req.body;
+
+  let videoPath = finalVideoPath;
+  let thumbnailPath = null;
+  let downloadedthumbnailPath = null;
+  
+  if (thumbnailID) {
+    // Download thumbnail from URL
+    console.log('Downloading Thumbnail from google drive ID:', thumbnailID);
+    downloadedthumbnailPath = path.join('temp', `thumbnail_${uuidv4()}.png`);
+    try {
+      await downloadMusicFile(`https://drive.google.com/uc?export=download&id=${thumbnailID}`, downloadedthumbnailPath);
+      thumbnailPath = downloadedthumbnailPath;
+      console.log('Thumbnail downloaded to:', thumbnailPath);
+      console.log('VideoPath is:', videoPath);
+    } catch (downloadError) {
+      console.warn('Failed to download thumbnail:', downloadError.message);
+      return res.status(500).json({ 
+        error: 'Failed to download thumbnail: ' + downloadError.message 
+      });
+    }
+  }
+  
+  if (!videoPath || !thumbnailPath) {
+    return res.status(400).json({ 
+      error: 'videoPath and thumbnailPath are required' 
+    });
+  }
+  
+  // Validate input files exist
+  if (!fsSync.existsSync(videoPath)) {
+    return res.status(404).json({ 
+      error: `Video file not found: ${videoPath}` 
+    });
+  }
+  
+  if (!fsSync.existsSync(thumbnailPath)) {
+    return res.status(404).json({ 
+      error: `Thumbnail file not found: ${thumbnailPath}` 
+    });
+  }
+  
+  try {
+    // Generate output path
+    const timestamp = Date.now();
+    const outputPath = path.join('temp', `final_video_${timestamp}.mp4`);
+    
+    // Get video info first to match dimensions and frame rate
+    const videoInfo = await getVideoInfo(videoPath);
+    const { width = 270, height = 480, fps = 30 } = videoInfo;
+    
+    console.log(`Video info - Width: ${width}, Height: ${height}, FPS: ${fps}`);
+    
+    // Simplified FFmpeg command that's more reliable
+    const ffmpegCommand = [
+      'ffmpeg',
+      '-loop', '1',
+      '-t', thumbnailDuration.toString(),
+      '-i', thumbnailPath,
+      '-i', videoPath,
+      '-filter_complex',
+      `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1:1,fps=${fps},format=yuv420p[thumb];[1:v]setsar=1:1[video];[thumb][video]concat=n=2:v=1:a=0[outv];[1:a]apad=pad_dur=${thumbnailDuration}[outa]`,
+      '-map', '[outv]',
+      '-map', '[outa]',
+      '-c:v', 'libx264',
+      '-c:a', 'aac',
+      '-pix_fmt', 'yuv420p',
+      '-preset', 'fast',
+      '-y',
+      outputPath
+    ];
+    
+    console.log('Executing FFmpeg command:', ffmpegCommand.join(' '));
+    
+    // Execute FFmpeg command with timeout
+    await new Promise((resolve, reject) => {
+      const ffmpegProcess = spawn('ffmpeg', ffmpegCommand.slice(1), {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      
+      // Set timeout to prevent hanging (60 seconds)
+      const timeout = setTimeout(() => {
+        ffmpegProcess.kill('SIGKILL');
+        reject(new Error('FFmpeg process timed out after 60 seconds'));
+      }, 60000);
+      
+      let stderr = '';
+      
+      ffmpegProcess.stdout.on('data', (data) => {
+        console.log(`FFmpeg stdout: ${data}`);
+      });
+      
+      ffmpegProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+        console.log(`FFmpeg stderr: ${data}`);
+      });
+      
+      ffmpegProcess.on('close', (code) => {
+        clearTimeout(timeout);
+        if (code === 0) {
+          console.log('FFmpeg process completed successfully');
+          resolve();
+        } else {
+          console.error(`FFmpeg process exited with code ${code}`);
+          console.error('FFmpeg stderr:', stderr);
+          reject(new Error(`FFmpeg failed with exit code ${code}: ${stderr}`));
+        }
+      });
+      
+      ffmpegProcess.on('error', (error) => {
+        clearTimeout(timeout);
+        console.error('FFmpeg process error:', error);
+        reject(new Error(`FFmpeg process error: ${error.message}`));
+      });
+    });
+    
+    // Check if output file was created
+    if (!fsSync.existsSync(outputPath)) {
+      throw new Error('Video processing failed - output file not created');
+    }
+    
+    // Get file stats
+    const stats = await fs.stat(outputPath);
+    
+    // Store the processed video info
+    const videoId = `video_${timestamp}`;
+    finalVideoPath = outputPath;
+    
+    // Clean up downloaded thumbnail
+    if (downloadedthumbnailPath && fsSync.existsSync(downloadedthumbnailPath)) {
+      try {
+        await fs.unlink(downloadedthumbnailPath);
+        console.log('Cleaned up downloaded thumbnail');
+      } catch (cleanupError) {
+        console.warn('Failed to cleanup thumbnail:', cleanupError.message);
+      }
+    }
+    
+    res.json({
+      success: true,
+      videoId: videoId,
+      finalVideoPath: outputPath,
+      originalVideoPath: videoPath,
+      thumbnailPath: thumbnailPath,
+      thumbnailDuration: thumbnailDuration,
+      outputFileSize: stats.size,
+      processedAt: new Date().toISOString(),
+      message: `Video processed successfully with ${thumbnailDuration}s thumbnail intro`,
+      downloadUrl: `/get-final-video/${videoId}`
+    });
+    
+  } catch (error) {
+    console.error('Video processing error:', error);
+    
+    // Clean up files on error
+    const timestamp = Date.now();
+    const outputPath = path.join('temp', `final_video_${timestamp}.mp4`);
+    if (fsSync.existsSync(outputPath)) {
+      try {
+        await fs.unlink(outputPath);
+      } catch (unlinkError) {
+        console.warn('Failed to cleanup failed output file:', unlinkError.message);
+      }
+    }
+    
+    if (downloadedthumbnailPath && fsSync.existsSync(downloadedthumbnailPath)) {
+      try {
+        await fs.unlink(downloadedthumbnailPath);
+      } catch (unlinkError) {
+        console.warn('Failed to cleanup downloaded thumbnail:', unlinkError.message);
+      }
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      originalVideoPath: videoPath,
+      thumbnailPath: thumbnailPath,
+      failedAt: new Date().toISOString()
+    });
+  }
+});
+
+// Helper function to get video information
+const getVideoInfo = (videoPath) => {
+  return new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(videoPath, (err, metadata) => {
+      if (err) {
+        console.warn('Could not get video info, using defaults:', err.message);
+        resolve({ width: 1080, height: 1920, fps: 30 });
+        return;
+      }
+      
+      const videoStream = metadata.streams.find(stream => stream.codec_type === 'video');
+      if (videoStream) {
+        const fps = videoStream.r_frame_rate ? eval(videoStream.r_frame_rate) : 30;
+        resolve({
+          width: videoStream.width || 270,
+          height: videoStream.height || 480,
+          fps: Math.round(fps) || 30
+        });
+      } else {
+        resolve({ width: 270, height: 480, fps: 30 });
+      }
+    });
+  });
 };
 
 // Utility function to download music file from URL
@@ -96,19 +312,49 @@ const downloadGoogleDriveFile = async (fileId, filepath) => {
 };
 
 // Compress video using ffmpeg and output to final file path
-const compressVideo = (inputPath, outputPath) => {
+const compressVideo = (inputPath, outputPath, options = {}) => {
   return new Promise((resolve, reject) => {
-    const cmd = `ffmpeg -i "${inputPath}" -c:v libx264 -crf 22 -preset slow -tune film -maxrate 5M -bufsize 9M -vf "scale='if(gte(iw,ih),min(1280,iw),-2)':'if(lt(iw,ih),min(720,ih),-2)'" -c:a aac -b:a 128k -ac 2 -movflags +faststart -y "${outputPath}"`;
+    const {
+      crf = 23,
+      preset = 'medium',
+      maxrate = '3M',
+      bufsize = '6M',
+      audioBitrate = '96k',
+      maxWidth = 1280,
+      maxHeight = 720,
+      timeout = 600000  // 10 minutes default timeout
+    } = options;
+
+    const cmd = `ffmpeg -i "${inputPath}" -c:v libx264 -crf ${crf} -preset ${preset} -tune film -maxrate ${maxrate} -bufsize ${bufsize} -vf "scale='if(gte(iw,ih),min(${maxWidth},iw),-2)':'if(lt(iw,ih),min(${maxHeight},ih),-2)'" -c:a aac -b:a ${audioBitrate} -ac 2 -movflags +faststart -y "${outputPath}"`;
     
-    exec(cmd, (error, stdout, stderr) => {
+    console.log('Starting video compression...');
+    console.log('Command:', cmd);
+    
+    exec(cmd, {
+      timeout: timeout,
+      maxBuffer: 1024 * 1024 * 10, // 10MB buffer
+      killSignal: 'SIGKILL'
+    }, (error, stdout, stderr) => {
       if (error) {
-        reject(new Error(`FFmpeg compression failed: ${stderr || error.message}`));
+        if (error.killed && error.signal === 'SIGKILL') {
+          reject(new Error(`Video compression timed out after ${timeout}ms`));
+        } else {
+          reject(new Error(`FFmpeg compression failed: ${stderr || error.message}`));
+        }
       } else {
-        resolve();
+        console.log('Video compression completed successfully');
+        resolve({
+          success: true,
+          outputPath: outputPath,
+          stdout: stdout,
+          stderr: stderr
+        });
       }
     });
   });
 };
+
+module.exports = { compressVideo };
 
 // Helper function to attempt download with compression
 const attemptDownload = async (downloadUrl, finalFilePath) => {
@@ -226,11 +472,6 @@ module.exports = {
   downloadGoogleDriveFile,
   extractGoogleDriveFileId
 };
-
-// Global variables to store file paths
-let currentVideoPath = null;
-let processedVideoPath = null;
-let finalVideoPath = null;
 
 // Health check endpoint
 app.get('/health', (req, res) => {
